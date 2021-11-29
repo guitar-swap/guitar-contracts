@@ -168,8 +168,6 @@ abstract contract ReentrancyGuard {
 
 // File: @pancakeswap\pancake-swap-lib\contracts\math\SafeMath.sol
 
-
-
 pragma solidity >=0.4.0;
 
 /**
@@ -198,7 +196,7 @@ library SafeMath {
      */
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
-        require(c >= a, 'SafeMath: addition overflow');
+        require(c >= a, "SafeMath: addition overflow");
 
         return c;
     }
@@ -214,7 +212,7 @@ library SafeMath {
      * - Subtraction cannot overflow.
      */
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        return sub(a, b, 'SafeMath: subtraction overflow');
+        return sub(a, b, "SafeMath: subtraction overflow");
     }
 
     /**
@@ -257,7 +255,7 @@ library SafeMath {
         }
 
         uint256 c = a * b;
-        require(c / a == b, 'SafeMath: multiplication overflow');
+        require(c / a == b, "SafeMath: multiplication overflow");
 
         return c;
     }
@@ -275,7 +273,7 @@ library SafeMath {
      * - The divisor cannot be zero.
      */
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        return div(a, b, 'SafeMath: division by zero');
+        return div(a, b, "SafeMath: division by zero");
     }
 
     /**
@@ -315,7 +313,7 @@ library SafeMath {
      * - The divisor cannot be zero.
      */
     function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        return mod(a, b, 'SafeMath: modulo by zero');
+        return mod(a, b, "SafeMath: modulo by zero");
     }
 
     /**
@@ -357,7 +355,6 @@ library SafeMath {
         }
     }
 }
-
 
 // File: @openzeppelin/contracts/token/ERC20/IERC20.sol
 
@@ -855,11 +852,11 @@ interface IRandomNumberGenerator {
     function viewRandomResult() external view returns (uint32);
 }
 
-// File: contracts/interfaces/IBirbLottery.sol
+// File: contracts/interfaces/IGuitarSwapLottery.sol
 
 pragma solidity ^0.8.4;
 
-interface IBirbLottery {
+interface IGuitarSwapLottery {
     /**
      * @notice Buy tickets for the current lottery
      * @param _lotteryId: lotteryId
@@ -890,7 +887,7 @@ interface IBirbLottery {
     function closeLottery(uint256 _lotteryId) external;
 
     /**
-     * @notice Draw the final number, calculate reward in BIRB per group, and make lottery claimable
+     * @notice Draw the final number, calculate reward in GUT per group, and make lottery claimable
      * @param _lotteryId: lottery id
      * @param _autoInjection: reinjects funds into next lottery (vs. withdrawing all)
      * @dev Callable by operator
@@ -903,7 +900,7 @@ interface IBirbLottery {
     /**
      * @notice Inject funds
      * @param _lotteryId: lottery id
-     * @param _amount: amount to inject in BIRB token
+     * @param _amount: amount to inject in GUT token
      * @dev Callable by operator
      */
     function injectFunds(uint256 _lotteryId, uint256 _amount) external;
@@ -912,14 +909,14 @@ interface IBirbLottery {
      * @notice Start the lottery
      * @dev Callable by operator
      * @param _endTime: endTime of the lottery
-     * @param _priceTicketInBirb: price of a ticket in BIRB
+     * @param _priceTicketInGuitar: price of a ticket in GUT
      * @param _discountDivisor: the divisor to calculate the discount magnitude for bulks
      * @param _rewardsBreakdown: breakdown of rewards per bracket (must sum to 10,000)
      * @param _treasuryFee: treasury fee (10,000 = 100%, 100 = 1%)
      */
     function startLottery(
         uint256 _endTime,
-        uint256 _priceTicketInBirb,
+        uint256 _priceTicketInGuitar,
         uint256 _discountDivisor,
         uint256[6] calldata _rewardsBreakdown,
         uint256 _treasuryFee
@@ -931,16 +928,16 @@ interface IBirbLottery {
     function viewCurrentLotteryId() external returns (uint256);
 }
 
-// File: contracts/BirbLottery.sol
+// File: contracts/GuitarSwapLottery.sol
 
 pragma solidity ^0.8.4;
 pragma abicoder v2;
 
-/** @title BirbSwap Lottery.
+/** @title GuitarSwap Lottery.
  * @notice It is a contract for a lottery system using
  * randomness provided externally.
  */
-contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
+contract GuitarSwapLottery is ReentrancyGuard, IGuitarSwapLottery, Ownable {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -953,17 +950,17 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
 
     uint256 public maxNumberTicketsPerBuyOrClaim = 100;
 
-    uint256 public maxPriceTicketInBirb = 50 ether;
-    uint256 public minPriceTicketInBirb = 0.005 ether;
+    uint256 public maxPriceTicketInGuitar = 50 ether;
+    uint256 public minPriceTicketInGuitar = 0.005 ether;
 
     uint256 public pendingInjectionNextLottery;
 
     uint256 public constant MIN_DISCOUNT_DIVISOR = 300;
-    uint256 public constant MIN_LENGTH_LOTTERY = 4 hours - 5 minutes; // 4 hours
+    uint256 public constant MIN_LENGTH_LOTTERY = 2 hours - 5 minutes; // 2 hours
     uint256 public constant MAX_LENGTH_LOTTERY = 4 days + 5 minutes; // 4 days
     uint256 public constant MAX_TREASURY_FEE = 3000; // 30%
 
-    IERC20 public birbToken;
+    IERC20 public guitarToken;
     IRandomNumberGenerator public randomGenerator;
 
     enum Status {
@@ -977,15 +974,15 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
         Status status;
         uint256 startTime;
         uint256 endTime;
-        uint256 priceTicketInBirb;
+        uint256 priceTicketInGuitar;
         uint256 discountDivisor;
         uint256[6] rewardsBreakdown; // 0: 1 matching number // 5: 6 matching numbers
         uint256 treasuryFee; // 500: 5% // 200: 2% // 50: 0.5%
-        uint256[6] birbPerBracket;
+        uint256[6] guitarPerBracket;
         uint256[6] countWinnersPerBracket;
         uint256 firstTicketId;
         uint256 firstTicketIdNextLottery;
-        uint256 amountCollectedInBirb;
+        uint256 amountCollectedInGuitar;
         uint32 finalNumber;
     }
 
@@ -1038,7 +1035,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
         uint256 indexed lotteryId,
         uint256 startTime,
         uint256 endTime,
-        uint256 priceTicketInBirb,
+        uint256 priceTicketInGuitar,
         uint256 firstTicketId,
         uint256 injectedAmount
     );
@@ -1068,11 +1065,11 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
     /**
      * @notice Constructor
      * @dev RandomNumberGenerator must be deployed prior to this contract
-     * @param _birbTokenAddress: address of the BIRB token
+     * @param _guitarTokenAddress: address of the GUT token
      * @param _randomGeneratorAddress: address of the RandomGenerator contract used to work with ChainLink VRF
      */
-    constructor(address _birbTokenAddress, address _randomGeneratorAddress) {
-        birbToken = IERC20(_birbTokenAddress);
+    constructor(address _guitarTokenAddress, address _randomGeneratorAddress) {
+        guitarToken = IERC20(_guitarTokenAddress);
         randomGenerator = IRandomNumberGenerator(_randomGeneratorAddress);
 
         // Initializes a mapping
@@ -1111,28 +1108,28 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             "Lottery is over"
         );
 
-        // Calculate number of BIRB to this contract
-        uint256 amountBirbToTransfer = _calculateTotalPriceForBulkTickets(
+        // Calculate number of GUT to this contract
+        uint256 amountGuitarToTransfer = _calculateTotalPriceForBulkTickets(
             _lotteries[_lotteryId].discountDivisor,
-            _lotteries[_lotteryId].priceTicketInBirb,
+            _lotteries[_lotteryId].priceTicketInGuitar,
             _ticketNumbers.length
         );
 
-        // Transfer birb tokens to this contract
-        uint256 balanceBefore = birbToken.balanceOf(address(this));
-        birbToken.safeTransferFrom(
+        // Transfer guitar tokens to this contract
+        uint256 balanceBefore = guitarToken.balanceOf(address(this));
+        guitarToken.safeTransferFrom(
             address(msg.sender),
             address(this),
-            amountBirbToTransfer
+            amountGuitarToTransfer
         );
-        amountBirbToTransfer = birbToken.balanceOf(address(this)).sub(
+        amountGuitarToTransfer = guitarToken.balanceOf(address(this)).sub(
             balanceBefore
         );
 
         // Increment the total amount collected for the lottery round
-        _lotteries[_lotteryId].amountCollectedInBirb = _lotteries[_lotteryId]
-            .amountCollectedInBirb
-            .add(amountBirbToTransfer);
+        _lotteries[_lotteryId].amountCollectedInGuitar = _lotteries[_lotteryId]
+            .amountCollectedInGuitar
+            .add(amountGuitarToTransfer);
 
         for (uint256 i = 0; i < _ticketNumbers.length; i++) {
             uint32 thisTicketNumber = _ticketNumbers[i];
@@ -1200,8 +1197,8 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             "Lottery not claimable"
         );
 
-        // Initializes the rewardInBirbToTransfer
-        uint256 rewardInBirbToTransfer;
+        // Initializes the rewardInGuitarToTransfer
+        uint256 rewardInGuitarToTransfer;
 
         for (uint256 i = 0; i < _ticketIds.length; i++) {
             require(_brackets[i] < 6, "Bracket out of range"); // Must be between 0 and 5
@@ -1245,15 +1242,17 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             }
 
             // Increment the reward to transfer
-            rewardInBirbToTransfer += rewardForTicketId;
+            rewardInGuitarToTransfer = rewardInGuitarToTransfer.add(
+                rewardForTicketId
+            );
         }
 
         // Transfer money to msg.sender
-        birbToken.safeTransfer(msg.sender, rewardInBirbToTransfer);
+        guitarToken.safeTransfer(msg.sender, rewardInGuitarToTransfer);
 
         emit TicketsClaim(
             msg.sender,
-            rewardInBirbToTransfer,
+            rewardInGuitarToTransfer,
             _lotteryId,
             _ticketIds.length
         );
@@ -1291,7 +1290,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
     }
 
     /**
-     * @notice Draw the final number, calculate reward in BIRB per group, and make lottery claimable
+     * @notice Draw the final number, calculate reward in GUT per group, and make lottery claimable
      * @param _lotteryId: lottery id
      * @param _autoInjection: reinjects funds into next lottery (vs. withdrawing all)
      * @dev Callable by operator
@@ -1316,15 +1315,15 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
         uint256 numberAddressesInPreviousBracket;
 
         // Calculate the amount to share post-treasury fee
-        uint256 amountToShareToWinners = (
-            ((_lotteries[_lotteryId].amountCollectedInBirb) *
-                (10000 - _lotteries[_lotteryId].treasuryFee))
-        ) / 10000;
+        uint256 amountToShareToWinners = _lotteries[_lotteryId]
+            .amountCollectedInGuitar
+            .mul(uint256(10000).sub(_lotteries[_lotteryId].treasuryFee))
+            .div(10000);
 
         // Initializes the amount to withdraw to treasury
         uint256 amountToWithdrawToTreasury;
 
-        // Calculate prizes in BIRB for each bracket by starting from the highest one
+        // Calculate prizes in GUT for each bracket by starting from the highest one
         for (uint32 i = 0; i < 6; i++) {
             uint32 j = 5 - i;
             uint32 transformedWinningNumber = _bracketCalculator[j] +
@@ -1344,7 +1343,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             ) {
                 // B. If rewards at this bracket are > 0, calculate, else, report the numberAddresses from previous bracket
                 if (_lotteries[_lotteryId].rewardsBreakdown[j] != 0) {
-                    _lotteries[_lotteryId].birbPerBracket[j] =
+                    _lotteries[_lotteryId].guitarPerBracket[j] =
                         ((_lotteries[_lotteryId].rewardsBreakdown[j] *
                             amountToShareToWinners) /
                             (_numberTicketsPerLotteryId[_lotteryId][
@@ -1357,14 +1356,16 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
                         _lotteryId
                     ][transformedWinningNumber];
                 }
-                // A. No BIRB to distribute, they are added to the amount to withdraw to treasury address
+                // A. No GUT to distribute, they are added to the amount to withdraw to treasury address
             } else {
-                _lotteries[_lotteryId].birbPerBracket[j] = 0;
+                _lotteries[_lotteryId].guitarPerBracket[j] = 0;
 
-                amountToWithdrawToTreasury +=
-                    (_lotteries[_lotteryId].rewardsBreakdown[j] *
-                        amountToShareToWinners) /
-                    10000;
+                amountToWithdrawToTreasury = amountToWithdrawToTreasury.add(
+                    _lotteries[_lotteryId]
+                        .rewardsBreakdown[j]
+                        .mul(amountToShareToWinners)
+                        .div(10000)
+                );
             }
         }
 
@@ -1377,15 +1378,16 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             amountToWithdrawToTreasury = 0;
         }
 
-        amountToWithdrawToTreasury = amountToWithdrawToTreasury.add(
-            _lotteries[_lotteryId].amountCollectedInBirb.sub(
-                amountToShareToWinners
-            )
-        );
+        amountToWithdrawToTreasury = amountToWithdrawToTreasury
+            .add(_lotteries[_lotteryId].amountCollectedInGuitar)
+            .sub(amountToShareToWinners);
 
-        // Transfer BIRB to treasury address
+        // Transfer GUT to treasury address
         if (amountToWithdrawToTreasury > 0) {
-            birbToken.safeTransfer(treasuryAddress, amountToWithdrawToTreasury);
+            guitarToken.safeTransfer(
+                treasuryAddress,
+                amountToWithdrawToTreasury
+            );
         }
 
         emit LotteryNumberDrawn(
@@ -1429,7 +1431,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
     /**
      * @notice Inject funds
      * @param _lotteryId: lottery id
-     * @param _amount: amount to inject in BIRB token
+     * @param _amount: amount to inject in GUT token
      * @dev Callable by owner or injector address
      */
     function injectFunds(uint256 _lotteryId, uint256 _amount)
@@ -1442,12 +1444,16 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             "Lottery not open"
         );
 
-        uint256 balanceBefore = birbToken.balanceOf(address(this));
-        birbToken.safeTransferFrom(address(msg.sender), address(this), _amount);
-        _amount = birbToken.balanceOf(address(this)).sub(balanceBefore);
+        uint256 balanceBefore = guitarToken.balanceOf(address(this));
+        guitarToken.safeTransferFrom(
+            address(msg.sender),
+            address(this),
+            _amount
+        );
+        _amount = guitarToken.balanceOf(address(this)).sub(balanceBefore);
 
-        _lotteries[_lotteryId].amountCollectedInBirb = _lotteries[_lotteryId]
-            .amountCollectedInBirb
+        _lotteries[_lotteryId].amountCollectedInGuitar = _lotteries[_lotteryId]
+            .amountCollectedInGuitar
             .add(_amount);
 
         emit LotteryInjection(_lotteryId, _amount);
@@ -1457,14 +1463,14 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
      * @notice Start the lottery
      * @dev Callable by operator
      * @param _endTime: endTime of the lottery
-     * @param _priceTicketInBirb: price of a ticket in BIRB
+     * @param _priceTicketInGuitar: price of a ticket in GUT
      * @param _discountDivisor: the divisor to calculate the discount magnitude for bulks
      * @param _rewardsBreakdown: breakdown of rewards per bracket (must sum to 10,000)
      * @param _treasuryFee: treasury fee (10,000 = 100%, 100 = 1%)
      */
     function startLottery(
         uint256 _endTime,
-        uint256 _priceTicketInBirb,
+        uint256 _priceTicketInGuitar,
         uint256 _discountDivisor,
         uint256[6] calldata _rewardsBreakdown,
         uint256 _treasuryFee
@@ -1482,8 +1488,8 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
         );
 
         require(
-            (_priceTicketInBirb >= minPriceTicketInBirb) &&
-                (_priceTicketInBirb <= maxPriceTicketInBirb),
+            (_priceTicketInGuitar >= minPriceTicketInGuitar) &&
+                (_priceTicketInGuitar <= maxPriceTicketInGuitar),
             "Outside of limits"
         );
 
@@ -1509,11 +1515,11 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             status: Status.Open,
             startTime: block.timestamp,
             endTime: _endTime,
-            priceTicketInBirb: _priceTicketInBirb,
+            priceTicketInGuitar: _priceTicketInGuitar,
             discountDivisor: _discountDivisor,
             rewardsBreakdown: _rewardsBreakdown,
             treasuryFee: _treasuryFee,
-            birbPerBracket: [
+            guitarPerBracket: [
                 uint256(0),
                 uint256(0),
                 uint256(0),
@@ -1531,7 +1537,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             ],
             firstTicketId: currentTicketId,
             firstTicketIdNextLottery: currentTicketId,
-            amountCollectedInBirb: pendingInjectionNextLottery,
+            amountCollectedInGuitar: pendingInjectionNextLottery,
             finalNumber: 0
         });
 
@@ -1539,7 +1545,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
             currentLotteryId,
             block.timestamp,
             _endTime,
-            _priceTicketInBirb,
+            _priceTicketInGuitar,
             currentTicketId,
             pendingInjectionNextLottery
         );
@@ -1557,7 +1563,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
         external
         onlyOwner
     {
-        require(_tokenAddress != address(birbToken), "Cannot be BIRB token");
+        require(_tokenAddress != address(guitarToken), "Cannot be GUT token");
 
         IERC20(_tokenAddress).safeTransfer(address(msg.sender), _tokenAmount);
 
@@ -1565,22 +1571,22 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
     }
 
     /**
-     * @notice Set BIRB price ticket upper/lower limit
+     * @notice Set GUT price ticket upper/lower limit
      * @dev Only callable by owner
-     * @param _minPriceTicketInBirb: minimum price of a ticket in BIRB
-     * @param _maxPriceTicketInBirb: maximum price of a ticket in BIRB
+     * @param _minPriceTicketInGuitar: minimum price of a ticket in GUT
+     * @param _maxPriceTicketInGuitar: maximum price of a ticket in GUT
      */
-    function setMinAndMaxTicketPriceInBirb(
-        uint256 _minPriceTicketInBirb,
-        uint256 _maxPriceTicketInBirb
+    function setMinAndMaxTicketPriceInGuitar(
+        uint256 _minPriceTicketInGuitar,
+        uint256 _maxPriceTicketInGuitar
     ) external onlyOwner {
         require(
-            _minPriceTicketInBirb <= _maxPriceTicketInBirb,
+            _minPriceTicketInGuitar <= _maxPriceTicketInGuitar,
             "minPrice must be < maxPrice"
         );
 
-        minPriceTicketInBirb = _minPriceTicketInBirb;
-        maxPriceTicketInBirb = _maxPriceTicketInBirb;
+        minPriceTicketInGuitar = _minPriceTicketInGuitar;
+        maxPriceTicketInGuitar = _maxPriceTicketInGuitar;
     }
 
     /**
@@ -1625,7 +1631,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
     /**
      * @notice Calculate price of a set of tickets
      * @param _discountDivisor: divisor for the discount
-     * @param _priceTicket price of a ticket (in BIRB)
+     * @param _priceTicket price of a ticket (in GUT)
      * @param _numberTickets number of tickets to buy
      */
     function calculateTotalPriceForBulkTickets(
@@ -1803,7 +1809,7 @@ contract BirbLottery is ReentrancyGuard, IBirbLottery, Ownable {
 
         // Confirm that the two transformed numbers are the same, if not throw
         if (transformedWinningNumber == transformedUserNumber) {
-            return _lotteries[_lotteryId].birbPerBracket[_bracket];
+            return _lotteries[_lotteryId].guitarPerBracket[_bracket];
         } else {
             return 0;
         }
