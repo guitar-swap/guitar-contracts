@@ -784,11 +784,11 @@ interface IRandomNumberGenerator {
     function viewRandomResult() external view returns (uint32);
 }
 
-// File: contracts/interfaces/IBirbLottery.sol
+// File: contracts/interfaces/IGuitarLottery.sol
 
 pragma solidity ^0.8.4;
 
-interface IBirbLottery {
+interface IGuitarLottery {
     /**
      * @notice Buy tickets for the current lottery
      * @param _lotteryId: lotteryId
@@ -818,7 +818,7 @@ interface IBirbLottery {
     function closeLottery(uint256 _lotteryId) external;
 
     /**
-     * @notice Draw the final number, calculate reward in BIRB per group, and make lottery claimable
+     * @notice Draw the final number, calculate reward in GUT per group, and make lottery claimable
      * @param _lotteryId: lottery id
      * @param _autoInjection: reinjects funds into next lottery (vs. withdrawing all)
      * @dev Callable by operator
@@ -828,7 +828,7 @@ interface IBirbLottery {
     /**
      * @notice Inject funds
      * @param _lotteryId: lottery id
-     * @param _amount: amount to inject in BIRB token
+     * @param _amount: amount to inject in GUT token
      * @dev Callable by operator
      */
     function injectFunds(uint256 _lotteryId, uint256 _amount) external;
@@ -837,14 +837,14 @@ interface IBirbLottery {
      * @notice Start the lottery
      * @dev Callable by operator
      * @param _endTime: endTime of the lottery
-     * @param _priceTicketInBirb: price of a ticket in BIRB
+     * @param _priceTicketInGuitar: price of a ticket in GUT
      * @param _discountDivisor: the divisor to calculate the discount magnitude for bulks
      * @param _rewardsBreakdown: breakdown of rewards per bracket (must sum to 10,000)
      * @param _treasuryFee: treasury fee (10,000 = 100%, 100 = 1%)
      */
     function startLottery(
         uint256 _endTime,
-        uint256 _priceTicketInBirb,
+        uint256 _priceTicketInGuitar,
         uint256 _discountDivisor,
         uint256[6] calldata _rewardsBreakdown,
         uint256 _treasuryFee
@@ -863,7 +863,7 @@ pragma solidity ^0.8.4;
 contract RandomNumberGenerator is VRFConsumerBase, IRandomNumberGenerator, Ownable {
     using SafeERC20 for IERC20;
 
-    address public birbLottery;
+    address public guitarLottery;
     bytes32 public keyHash;
     bytes32 public latestRequestId;
     uint32 public randomResult;
@@ -884,10 +884,10 @@ contract RandomNumberGenerator is VRFConsumerBase, IRandomNumberGenerator, Ownab
 
     /**
      * @notice Request randomness from a user-provided seed
-     * @param _seed: seed provided by the PancakeSwap lottery
+     * @param _seed: seed provided by the GuitarSwap lottery
      */
     function getRandomNumber(uint256 _seed) external override {
-        require(msg.sender == birbLottery, "Only BirbLottery");
+        require(msg.sender == guitarLottery, "Only GuitarLottery");
         require(keyHash != bytes32(0), "Must have valid key hash");
         require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK tokens");
 
@@ -911,11 +911,11 @@ contract RandomNumberGenerator is VRFConsumerBase, IRandomNumberGenerator, Ownab
     }
 
     /**
-     * @notice Set the address for the BirbLottery
-     * @param _birbLottery: address of the BirbSwap lottery
+     * @notice Set the address for the GuitarLottery
+     * @param _guitarLottery: address of the GuitarSwap lottery
      */
-    function setLotteryAddress(address _birbLottery) external onlyOwner {
-        birbLottery = _birbLottery;
+    function setLotteryAddress(address _guitarLottery) external onlyOwner {
+        guitarLottery = _guitarLottery;
     }
 
     /**
@@ -948,6 +948,6 @@ contract RandomNumberGenerator is VRFConsumerBase, IRandomNumberGenerator, Ownab
     function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         require(latestRequestId == requestId, "Wrong requestId");
         randomResult = uint32(1000000 + (randomness % 1000000));
-        latestLotteryId = IBirbLottery(birbLottery).viewCurrentLotteryId();
+        latestLotteryId = IGuitarLottery(guitarLottery).viewCurrentLotteryId();
     }
 }
