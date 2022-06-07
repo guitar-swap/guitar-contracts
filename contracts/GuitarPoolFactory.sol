@@ -1237,7 +1237,6 @@ contract GuitarPoolInitializable is Ownable, ReentrancyGuard {
      * @param _rewardPerBlock: the reward per block
      */
     function updateRewardPerBlock(uint256 _rewardPerBlock) external onlyOwner {
-        require(block.number < startBlock, "Pool has started");
         uint256 rewardDecimals = uint256(rewardToken.decimals());
         require(_rewardPerBlock <= MAX_EMISSION_RATE.mul(10**rewardDecimals), "Out of maximum emission rate");
         rewardPerBlock = _rewardPerBlock;
